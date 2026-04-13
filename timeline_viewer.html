@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Timeline Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --surface: #141414;
+    --border: #232323;
+    --text: #e8e5df;
+    --muted: #5a5751;
+    --accent: #c8b89a;
+    --company-color: #c8b89a;
+    --radius: 2px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Upload Screen */
+  #upload-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 32px;
+    padding: 40px;
+  }
+
+  #upload-screen h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    text-align: center;
+    line-height: 1.1;
+  }
+
+  #upload-screen h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  #upload-screen p {
+    color: var(--muted);
+    font-size: 14px;
+    font-family: 'DM Mono', monospace;
+    text-align: center;
+    max-width: 420px;
+    line-height: 1.7;
+  }
+
+  .drop-zone {
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    padding: 60px 80px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(200, 184, 154, 0.03);
+  }
+
+  .drop-zone input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-zone-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    opacity: 0.4;
+  }
+
+  .drop-zone-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .drop-zone-label strong {
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  #error-msg {
+    color: #e07070;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    display: none;
+  }
+
+  /* Main App */
+  #app { display: none; min-height: 100vh; }
+
+  /* Header */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(13,13,13,0.96);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+  }
+
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 0 12px;
+    gap: 24px;
+  }
+
+  .header-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  .header-title em {
+    font-style: italic;
+    color: var(--company-color);
+    transition: color 0.4s;
+  }
+
+  /* Company tabs */
+  .company-tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 0 0 14px;
+  }
+
+  .company-tab {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 2px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: none;
+    color: var(--muted);
+  }
+
+  .company-tab:hover {
+    color: var(--text);
+    border-color: var(--border);
+  }
+
+  .company-tab.active {
+    color: var(--bg);
+    border-color: transparent;
+  }
+
+  /* Jump-to-year strip */
+  .year-nav {
+    display: flex;
+    gap: 2px;
+    padding: 0 0 14px;
+    align-items: center;
+  }
+
+  .year-nav-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+
+  .year-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: none;
+    color: var(--muted);
+    transition: all 0.15s;
+  }
+
+  .year-btn:hover {
+    color: var(--text);
+    border-color: var(--muted);
+  }
+
+  /* Main content */
+  .content {
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 60px 40px 120px;
+  }
+
+  /* Company header block */
+  .company-header {
+    margin-bottom: 64px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .company-name {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(36px, 5vw, 64px);
+    font-weight: 400;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--company-color);
+    transition: color 0.4s;
+    margin-bottom: 10px;
+  }
+
+  .company-sector {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .company-stats {
+    margin-top: 20px;
+    display: flex;
+    gap: 32px;
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .stat-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    color: var(--text);
+  }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Year groups */
+  .year-group {
+    margin-bottom: 72px;
+  }
+
+  .year-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .year-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Event cards */
+  .event-item {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 0 28px;
+    margin-bottom: 36px;
+    position: relative;
+  }
+
+  .event-item:last-child { margin-bottom: 0; }
+
+  /* Timeline line */
+  .event-item::before {
+    content: '';
+    position: absolute;
+    left: 91px;
+    top: 28px;
+    bottom: -36px;
+    width: 1px;
+    background: var(--border);
+  }
+
+  .event-item:last-child::before { display: none; }
+
+  .event-date-col {
+    padding-top: 6px;
+    text-align: right;
+  }
+
+  .event-month {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  .event-dot {
+    position: absolute;
+    left: 86px;
+    top: 8px;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    border: 2px solid var(--company-color);
+    background: var(--bg);
+    transition: border-color 0.4s, background 0.2s;
+    z-index: 1;
+  }
+
+  .event-item:hover .event-dot {
+    background: var(--company-color);
+  }
+
+  .event-body {
+    padding-left: 20px;
+    padding-bottom: 8px;
+  }
+
+  .event-type-tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    display: inline-block;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .tag-product  { background: rgba(93, 202, 165, 0.12); color: #5DCAA5; }
+  .tag-funding  { background: rgba(93, 148, 221, 0.12); color: #5DCAA5; }
+  .tag-legal    { background: rgba(220, 80, 80, 0.12); color: #dc5050; }
+  .tag-ma       { background: rgba(200, 184, 154, 0.12); color: var(--accent); }
+  .tag-leadership { background: rgba(180, 140, 220, 0.10); color: #b48cdc; }
+
+  .event-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    margin-bottom: 10px;
+    color: var(--text);
+  }
+
+  .event-desc {
+    font-size: 14px;
+    line-height: 1.75;
+    color: #9a9590;
+    font-weight: 300;
+    max-width: 580px;
+  }
+
+  /* Funding amount highlight */
+  .event-funding-amount {
+    font-family: 'DM Serif Display', serif;
+    font-size: 15px;
+    color: #5aabff;
+    margin-top: 8px;
+    font-style: italic;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 80px 40px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+  }
+
+  /* Back to top */
+  .back-to-top {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .back-to-top.visible {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .back-to-top:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Transition */
+  .company-view {
+    animation: fadeSlide 0.3s ease;
+  }
+
+  @keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 600px) {
+    .header { padding: 0 20px; }
+    .content { padding: 40px 20px 100px; }
+    .event-item { grid-template-columns: 56px 1fr; }
+    .event-item::before { left: 67px; }
+    .event-dot { left: 62px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Upload Screen -->
+<div id="upload-screen">
+  <h1><em>Timeline</em><br>Viewer</h1>
+  <p>Load a timeline data file (JS or JSON) to explore company histories, funding rounds, and product launches.</p>
+  <div class="drop-zone" id="drop-zone">
+    <input type="file" id="file-input" accept=".js,.json">
+    <div class="drop-zone-icon">⏱</div>
+    <div class="drop-zone-label"><strong>Drop file here</strong> or click to browse<br><br>Accepts .js or .json with a DATA array</div>
+  </div>
+  <div id="error-msg"></div>
+</div>
+
+<!-- Main App -->
+<div id="app">
+  <header class="header">
+    <div class="header-top">
+      <div class="header-title">Timeline — <em id="header-company-name">—</em></div>
+      <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)" id="event-count"></div>
+    </div>
+    <div class="company-tabs" id="company-tabs"></div>
+    <div class="year-nav" id="year-nav">
+      <span class="year-nav-label">Jump</span>
+    </div>
+  </header>
+
+  <main class="content">
+    <div id="company-view"></div>
+  </main>
+
+  <button class="back-to-top" id="back-to-top" title="Back to top">↑</button>
+</div>
+
+<script>
+let DATA = [];
+let activeCompany = null;
+
+// ── File loading ────────────────────────────────────────────────────────────
+
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+const errorMsg = document.getElementById('error-msg');
+
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function showError(msg) {
+  errorMsg.textContent = msg;
+  errorMsg.style.display = 'block';
+}
+
+function handleFile(file) {
+  if (!file) return;
+  errorMsg.style.display = 'none';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      parseFileContent(e.target.result, file.name);
+    } catch(err) {
+      showError('Could not parse file: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseFileContent(text, filename) {
+  let parsed = null;
+
+  if (filename.endsWith('.json')) {
+    parsed = JSON.parse(text);
+  } else {
+    // Execute the JS in a sandboxed function, then grab DATA
+    try {
+      const fn = new Function(text + '\nreturn typeof DATA !== "undefined" ? DATA : null;');
+      parsed = fn();
+    } catch(e) {
+      throw new Error('JS execution failed: ' + e.message);
+    }
+    if (parsed === null) throw new Error('Could not find DATA variable in file.');
+  }
+
+  if (!Array.isArray(parsed)) throw new Error('Expected an array at the top level.');
+  DATA = parsed;
+  initApp();
+}
+
+// ── App init ────────────────────────────────────────────────────────────────
+
+function initApp() {
+  document.getElementById('upload-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  // Filter out non-company entries or include all
+  const companies = DATA.filter(c => c.events && c.events.length > 0);
+  activeCompany = companies[0]?.id || null;
+
+  buildTabs(companies);
+  if (activeCompany) renderCompany(activeCompany);
+  buildYearNav();
+}
+
+function buildTabs(companies) {
+  const tabs = document.getElementById('company-tabs');
+  tabs.innerHTML = '';
+  companies.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'company-tab' + (c.id === activeCompany ? ' active' : '');
+    btn.textContent = c.name;
+    btn.dataset.id = c.id;
+    if (c.id === activeCompany) btn.style.background = c.color;
+    btn.addEventListener('click', () => {
+      activeCompany = c.id;
+      document.querySelectorAll('.company-tab').forEach(t => {
+        t.classList.remove('active');
+        t.style.background = '';
+      });
+      btn.classList.add('active');
+      btn.style.background = c.color;
+      renderCompany(c.id);
+      updateHeader(c);
+      buildYearNav();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    tabs.appendChild(btn);
+  });
+}
+
+function updateHeader(company) {
+  document.getElementById('header-company-name').textContent = company.name;
+  document.getElementById('header-company-name').style.color = company.color;
+  document.documentElement.style.setProperty('--company-color', company.color);
+}
+
+function buildYearNav() {
+  const company = DATA.find(c => c.id === activeCompany);
+  if (!company) return;
+  const yearNav = document.getElementById('year-nav');
+  // Keep the label
+  yearNav.innerHTML = '<span class="year-nav-label">Jump</span>';
+
+  const years = [...new Set(company.events.map(e => e.date.split('-')[0]))].sort();
+  years.forEach(y => {
+    const btn = document.createElement('button');
+    btn.className = 'year-btn';
+    btn.textContent = y;
+    btn.addEventListener('click', () => {
+      const el = document.getElementById('year-' + y);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    yearNav.appendChild(btn);
+  });
+}
+
+// ── Rendering ────────────────────────────────────────────────────────────────
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function formatMonth(dateStr) {
+  const [, m] = dateStr.split('-');
+  return MONTHS[parseInt(m, 10) - 1] || '';
+}
+
+function renderCompany(id) {
+  const company = DATA.find(c => c.id === id);
+  if (!company) return;
+
+  updateHeader(company);
+
+  const view = document.getElementById('company-view');
+  view.className = 'company-view';
+
+  // Sort events
+  const events = [...company.events].sort((a, b) => a.date.localeCompare(b.date));
+
+  // Stats
+  const fundingEvents = events.filter(e => e.type === 'funding');
+  const productEvents = events.filter(e => e.type === 'product');
+  const years = [...new Set(events.map(e => e.date.split('-')[0]))];
+  const span = years.length > 1 ? `${years[0]}–${years[years.length-1]}` : years[0];
+
+  document.getElementById('event-count').textContent = `${events.length} events`;
+
+  // Group by year
+  const byYear = {};
+  events.forEach(e => {
+    const y = e.date.split('-')[0];
+    if (!byYear[y]) byYear[y] = [];
+    byYear[y].push(e);
+  });
+
+  let html = `
+    <div class="company-header">
+      <div class="company-name">${company.name}</div>
+      <div class="company-sector">${company.sector}</div>
+      <div class="company-stats">
+        <div class="stat"><div class="stat-value">${events.length}</div><div class="stat-label">Events</div></div>
+        <div class="stat"><div class="stat-value">${fundingEvents.length}</div><div class="stat-label">Funding rounds</div></div>
+        <div class="stat"><div class="stat-value">${productEvents.length}</div><div class="stat-label">Product launches</div></div>
+        <div class="stat"><div class="stat-value">${span}</div><div class="stat-label">Timeline</div></div>
+      </div>
+    </div>
+  `;
+
+  Object.entries(byYear).sort(([a],[b]) => a.localeCompare(b)).forEach(([year, evts]) => {
+    html += `<div class="year-group" id="year-${year}">`;
+    html += `<div class="year-label">${year}</div>`;
+    evts.forEach(ev => {
+      html += renderEvent(ev, company.color);
+    });
+    html += '</div>';
+  });
+
+  view.innerHTML = html;
+
+  // Animate dots on scroll (subtle)
+  view.querySelectorAll('.event-dot').forEach((dot, i) => {
+    dot.style.opacity = '0';
+    dot.style.transform = 'scale(0.5)';
+    setTimeout(() => {
+      dot.style.transition = `opacity 0.3s ${i * 30}ms, transform 0.3s ${i * 30}ms`;
+      dot.style.opacity = '1';
+      dot.style.transform = 'scale(1)';
+    }, 50);
+  });
+}
+
+function renderEvent(ev, companyColor) {
+  const tagClass = 'tag-' + (ev.type || 'product');
+  const tagLabel = (ev.type || 'product').toUpperCase();
+  const month = formatMonth(ev.date);
+
+  // Extract funding amount if present in title
+  let fundingBadge = '';
+  const fundingMatch = ev.title.match(/(\$[\d.]+[MBK](?:\s*→\s*\$[\d.]+[MBK])?)/);
+  if (ev.type === 'funding' && fundingMatch) {
+    fundingBadge = `<div class="event-funding-amount">${fundingMatch[1]}</div>`;
+  }
+
+  return `
+    <div class="event-item">
+      <div class="event-date-col">
+        <div class="event-month">${month}</div>
+      </div>
+      <div class="event-dot" style="border-color:${companyColor}"></div>
+      <div class="event-body">
+        <span class="event-type-tag ${tagClass}">${tagLabel}</span>
+        <div class="event-title">${ev.title}</div>
+        <div class="event-desc">${ev.desc}</div>
+        ${fundingBadge}
+      </div>
+    </div>
+  `;
+}
+
+// ── Back to top ──────────────────────────────────────────────────────────────
+
+const backBtn = document.getElementById('back-to-top');
+window.addEventListener('scroll', () => {
+  backBtn.classList.toggle('visible', window.scrollY > 400);
+});
+backBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+</script>
+</body>
+</html>
